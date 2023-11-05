@@ -1,0 +1,1 @@
+info_user.csv (user profile dataset) and info_answer.csv (detailed information about items) can be downloaded from https://github.com/THUIR/ZhihuRec-Dataset.
