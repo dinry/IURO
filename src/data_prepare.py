@@ -4,8 +4,6 @@ import random
 import pandas as pd
 import numpy as np
 import math
-
-from sklearn.model_selection import train_test_split
 def dataset_7_3_split(datafile_path):
     f6 = open("zhihu1M_7_3_split.txt", 'w')
     history_length = []
@@ -49,15 +47,15 @@ def index_generate(interaction_file_path,answer_info_file,user_info_file):
     for line in open(interaction_file_path,"r",encoding='utf-8'):
         line = line[:-1].strip('\n').split('\t')
         if line[0] not in dict_user.keys():
-            user_count = user_count + 1
-            dict_user[line[0]] = user_count
             # user_count = user_count + 1
+            dict_user[line[0]] = user_count
+            user_count = user_count + 1
         answers = line[1].split(',')
         for answer in answers:
             if answer.split('|')[0] not in dict_answer.keys():
-                answer_count = answer_count + 1
-                dict_answer[answer.split('|')[0]] = answer_count
                 # answer_count = answer_count + 1
+                dict_answer[answer.split('|')[0]] = answer_count
+                answer_count = answer_count + 1
     #pdb.set_trace()
     for line in open(user_info_file,"r",encoding='utf-8'):
         line = line[:-1].strip('\n').split('\t')
@@ -67,40 +65,33 @@ def index_generate(interaction_file_path,answer_info_file,user_info_file):
             province=line[-3]
             city=line[-2]
             if sex not in dict_sex.keys():
-                sex_count=sex_count+1
+                # sex_count=sex_count+1
                 dict_sex[sex]=sex_count
-                # sex_count = sex_count + 1
+                sex_count = sex_count + 1
             if province not in dict_province.keys():
-                province_count=province_count+1
+                # province_count=province_count+1
                 dict_province[province]=province_count
-                # province_count = province_count + 1
+                province_count = province_count + 1
             if city not in dict_city.keys():
-                city_count=city_count+1
+                # city_count=city_count+1
                 dict_city[city]=city_count
-                # city_count = city_count + 1
-    #pdb.set_trace()
-
+                city_count = city_count + 1
     for line in open(answer_info_file, "r", encoding='utf-8'):
         line = line[:-1].strip('\n').split('\t')
-        #pdb.set_trace()
         if line[0] in dict_answer.keys():
-            # pdb.set_trace()
             topics=line[17].strip(' ')
             topics=topics[:-1].split(',')
             for topic in topics:
                 if topic not in dict_topic.keys():
-                    topic_count = topic_count + 1
-                    dict_topic[topic] = topic_count
                     # topic_count = topic_count + 1
-        #pdb.set_trace()
+                    dict_topic[topic] = topic_count
+                    topic_count = topic_count + 1
         if line[0] in dict_answer.keys():
-            #pdb.set_trace()
             author= line[3].split(',')[0]
             if author not in dict_author.keys():
-                author_count=author_count+1
+                # author_count=author_count+1
                 dict_author[author]=author_count
-                # author_count = author_count + 1
-        #pdb.set_trace()
+                author_count = author_count + 1
     return dict_user,dict_sex,dict_province,dict_city,dict_answer,dict_topic,dict_author,user_count,sex_count,province_count,city_count,answer_count,topic_count,author_count
 
 
@@ -145,16 +136,19 @@ def answer_infos_generate(dict_answer,dict_topic,dict_author,answer_info_file):
             answer_infos[dict_answer[line[0]]]=[t,dict_author[author]]
     return answer_infos
 
-def liucun_label_generate(first_day_items,second_day_items,third_day_items,first_day_clicks,second_day_clicks,third_day_clicks):
-    liucun=[]
-    ctr_info=[]
-    # supervised signals
-    max_click_count=1
+def retention_label_generate(first_day_items,second_day_items,third_day_items,first_day_clicks,second_day_clicks,third_day_clicks):
+    label_retention=[]
+    ss_click=[]
+    ss_impression=[]
 
     for i in range(len(first_day_items)):
         label_click_1=0
         label_click_2=0
         lable_click_3=0
+        label_impression_1=0
+        label_impression_2=0
+        lable_impression_3=0
+
         label_1 = 0
         label_2 = 0
         label_3 = 0
@@ -168,7 +162,7 @@ def liucun_label_generate(first_day_items,second_day_items,third_day_items,first
         if len(third_index_impression)>0:
             label_3=1
         label=label_1+label_2+label_3
-        liucun.append(label)
+        label_retention.append(label)
         first_index_click = np.where(first_day_clicks[i, 0:len(first_day_clicks[0])] == 1)[0].tolist()
         second_index_click = np.where(second_day_clicks[i, 0:len(second_day_clicks[0])] == 1)[0].tolist()
         third_index_click = np.where(third_day_clicks[i, 0:len(third_day_clicks[0])] == 1)[0].tolist()
@@ -179,41 +173,29 @@ def liucun_label_generate(first_day_items,second_day_items,third_day_items,first
         if len(third_index_click)>0:
             lable_click_3=len(third_index_click)
         click_count=label_click_1+label_click_2+lable_click_3
-        ctr_info.append(math.log(1+click_count,math.e))
-    return liucun,ctr_info
-def liucun_label_generate_test(first_day_items,second_day_items,third_day_items,first_day_clicks,second_day_clicks,third_day_clicks):
-    liucun=[]
-    ctr_info=[]
-    for i in range(len(first_day_items)):
-        label_click_1=0
-        label_click_2=0
-        lable_click_3=0
-        label_1 = 0
-        label_2 = 0
-        label_3 = 0
-        pdb.set_trace()
-        first_index_impression = np.where(first_day_clicks[i, 0:len(first_day_clicks[0])] != -1)[0].tolist()
-        second_index_impression = np.where(second_day_clicks[i, 0:len(second_day_clicks[0])] != -1)[0].tolist()
-        third_index_impression = np.where(third_day_clicks[i, 0:len(third_day_clicks[0])] != -1)[0].tolist()
-        if len(first_index_impression)>0:
-            label_1=1
-        if len(second_index_impression)>0:
-            label_2=1
-        if len(third_index_impression)>0:
-            label_3=1
-        label=label_1+label_2+label_3
-        liucun.append(label)
-        first_index_click = np.where(first_day_clicks[i, 0:len(first_day_clicks[0])] == 1)[0].tolist()
-        second_index_click = np.where(second_day_clicks[i, 0:len(second_day_clicks[0])] == 1)[0].tolist()
-        third_index_click = np.where(third_day_clicks[i, 0:len(third_day_clicks[0])] == 1)[0].tolist()
-        if len(first_index_click)>0:
-            label_click_1=1
-        if len(second_index_click)>0:
-            label_click_2=1
-        if len(third_index_click)>0:
-            lable_click_3=1
-        ctr_info.append((label_click_1+label_click_2+lable_click_3)/3.0)
-    return liucun,ctr_info
+        ss_click.append(math.log(1+click_count,math.e))
+
+        first_index_unclick = np.where(first_day_clicks[i, 0:len(first_day_clicks[0])] == 0)[0].tolist()
+        second_index_unclick = np.where(second_day_clicks[i, 0:len(second_day_clicks[0])] == 0)[0].tolist()
+        third_index_unclick = np.where(third_day_clicks[i, 0:len(third_day_clicks[0])] == 0)[0].tolist()
+        if len(first_index_unclick)>0:
+            label_impression_1=len(first_index_unclick)
+        if len(second_index_unclick)>0:
+            label_impression_2=len(second_index_unclick)
+        if len(third_index_unclick)>0:
+            lable_impression_3=len(third_index_unclick)
+        impression_count=label_impression_1+label_impression_2+lable_impression_3
+        ss_impression.append(math.log(1+impression_count,math.e))
+
+    return label_retention, ss_click, ss_impression
+def items_interacted_in_next_three_days(first_day_items,second_day_items,third_day_items,first_day_clicks,second_day_clicks,third_day_clicks):
+    items = np.concatenate([first_day_items, second_day_items,third_day_items], axis=0)
+    clicks = np.concatenate([first_day_clicks, second_day_clicks,third_day_clicks], axis=0)
+    click_index = np.where(clicks[0:len(clicks)] == 1)[0].tolist()
+    click_items = items[click_index]
+    impression_index = np.where(clicks[0:len(clicks)] == 0)[0].tolist()
+    impression_items = items[impression_index]
+    return click_items,impression_items
 def data_generate(file_path,dict_u,dict_i,user_infos,answer_infos):
     user_list = []
 
@@ -460,33 +442,69 @@ def data_generate(file_path,dict_u,dict_i,user_infos,answer_infos):
     items_data=[one_items,two_items,three_items,four_items,five_items,six_items,seven_items,eight_items,nine_items,ten_items]
     clicks_data=[one_items_click,two_items_click,three_items_click,four_items_click,five_items_click,six_items_click,seven_items_click,eight_items_click,nine_items_click,ten_items_click]
 
-    train_liucun=[]
-    test_liucun=[]
+    train_retention=[]
+    test_retention=[]
     items=one_items
     clicks=one_items_click
     for index_column in range(1, 5):
-        label_liucun,label_ctr = liucun_label_generate(items_data[index_column], items_data[index_column + 1],items_data[index_column + 1], clicks_data[index_column],clicks_data[index_column + 1], clicks_data[index_column + 2])
+        label_retention,ss_click, ss_impression= retention_label_generate(items_data[index_column], items_data[index_column + 1],items_data[index_column + 2], clicks_data[index_column],clicks_data[index_column + 1], clicks_data[index_column + 2])
+        future_click, future_impression=items_interacted_in_next_three_days(items_data[index_column], items_data[index_column + 1],items_data[index_column + 2], clicks_data[index_column],clicks_data[index_column + 1], clicks_data[index_column + 2])
         for index_row in range(0, len(seven_items)):
             index_click = np.where(clicks[index_row, 0:len(clicks[0])] == 1)[0].tolist()
             if len(index_click)!=0:
                 u = user[index_row].tolist()[0]
+                sex=user_infos[u][0]
+                province=user_infos[u][1]
+                city=user_infos[u][2]
                 row=items[index_row]
                 train=row[index_click]
                 hist_i = train.tolist()
-                train_liucun.append([u, hist_i, label_liucun[index_row],label_ctr[index_row]])
+                hist_topic=[]
+                for hi in hist_i:
+                    hist_topic.append(answer_infos[hi][0])
+                future_i=future_click[index_row]
+                future_topic=[]
+                for fu in future_i:
+                    future_topic.append(answer_infos[fu][0])
+                if len(hist_i)>50:
+                    short_term_item=hist_i[-50:]
+                    short_term_topic=hist_topic[-50:]
+                    long_term_item=hist_i[0:-50]
+                    long_term_topic=hist_topic[0:-50]
+                else:
+                    short_term_item=hist_i
+                    short_term_topic=hist_topic
+                    long_term_item=hist_i
+                    long_term_topic=hist_topic
+                train_retention.append([u,sex,province,city,hist_i,hist_topic,short_term_item,short_term_topic,label_retention[index_row],ss_click[index_row],ss_impression[index_row],future_i,future_topic])
         items = np.concatenate([items, items_data[index_column]], axis=1)
         clicks = np.concatenate([clicks, clicks_data[index_column]], axis=1)
     items = np.concatenate([items, items_data[5],items_data[6]], axis=1)
     clicks = np.concatenate([clicks, clicks_data[5],clicks_data[6]], axis=1)
-    label_liucun,_ = liucun_label_generate(items_data[7], items_data[8],items_data[9], clicks_data[7],clicks_data[8], clicks_data[9])
+    label_retention,ss_click,ss_impression = retention_label_generate(items_data[7], items_data[8],items_data[9], clicks_data[7],clicks_data[8], clicks_data[9])
     for index_row in range(0, len(items)):
         index_click = np.where(clicks[index_row, 0:len(clicks[0])] == 1)[0].tolist()
         if len(index_click)!=0:
             u = user[index_row].tolist()[0]
+            sex = user_infos[u][0]
+            province = user_infos[u][1]
+            city = user_infos[u][2]
             row=items[index_row]
             train=row[index_click]
             hist_i = train.tolist()
-            test_liucun.append([u, hist_i, label_liucun[index_row]])
-    random.shuffle(test_liucun)
-    return train_liucun,test_liucun
-# user, sex, province, city, hist_item, hist_topic, short_term_item, short_term_topic, label, supervised_signals_clicks, supervised_signals_impressions, future_item, future_topic
+            hist_topic = []
+            for hi in hist_i:
+                hist_topic.append(answer_infos[hi][0])
+            if len(hist_i) > 50:
+                short_term_item = hist_i[-50:]
+                short_term_topic = hist_topic[-50:]
+                long_term_item = hist_i[0:-50]
+                long_term_topic = hist_topic[0:-50]
+            else:
+                short_term_item = hist_i
+                short_term_topic = hist_topic
+                long_term_item = hist_i
+                long_term_topic = hist_topic
+            test_retention.append([u,sex,province,city,hist_i,hist_topic,short_term_item,short_term_topic,label_retention[index_row],ss_click[index_row],ss_impression[index_row]])
+    random.shuffle(test_retention)
+    return train_retention,test_retention
