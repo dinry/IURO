@@ -109,8 +109,9 @@ class ImportCTR():
         return self.sess.run([self.sigmoid], feed_dict={self.u:_user,self.sex:_gender,self.province:_province,self.city:_city,self.hist_click:_hist_click,self.hist_topic:_hist_topic,self.sl_hist_click:_sl_click,self.target_item:_target_item,self.target_item_topic:_target_item_topic,self.short_term_item:_short_term_item, self.short_term_topic:_short_term_topic, self.short_term_sl:_short_term_sl})
 
 def load_user(user,sex,province,city,hist_i,hist_t,hist_sl,short_term_i,short_term_t,short_term_sl):
-
-    return
+    '''copy user data to match with candidate items'''
+    user_feature=[]   # copy input
+    return user_feature
 
 # user data and item pool for online serving
 answer_pool_file='answer_pool.data'
@@ -162,6 +163,7 @@ for line in user_behavior_data:
 
 
 # join with ctr model
+
 # for file_u in user_behavior_data:
 #     ui_write=open(ui_retention_file_path+"/"+file_u,'w')
 #     for line in open(user_behavior_file + "/" + file_u):
@@ -172,11 +174,10 @@ for line in user_behavior_data:
 #                                      u_feature[6], doc_feature[0], doc_feature[1])
 #     index=result_ctr[0].argsort()[::-1]
 #     score_name=np.array(doc_list)[index[0:500]]
-# 	score_merge=0.2*3*result_ctr[0][index[0:500]]+0.8*result_retention[0][index[0:500]]
+#     score_merge=0.2*3*result_ctr[0][index[0:500]]+0.8*result_retention[0][index[0:500]]
 #     score_retention=dict(zip(score_name,score_merge))
 #     score_retention_rank=sorted(score_retention.items(), key=lambda x: x[1], reverse=True)
 #     score_retention_rank=score_retention_rank[0:30]
-#     ui_write.write(uin_id2index[int(flds[0])]+"\t"+'|'.join('{key}:{value}'.format(key=k, value=v) for k, v in score_retention_rank)+"\n")
 #     print("part-end",file=sys.stderr)
 #     ui_write.flush()
 #     ui_write.close()
