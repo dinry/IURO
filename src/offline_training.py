@@ -19,9 +19,9 @@ tf.set_random_seed(1234)
 train_batch_size = 64
 test_batch_size = 64
 
-
-answer_info_file="../dataset/info_answer.csv"
-user_info_file="../dataset/info_user.csv"
+model_save_path="model_save/auc"
+answer_info_file="../dataset/answer_infos.txt"
+user_info_file="../dataset/user_infos.txt"
 ui_transaction_file="../dataset/zhihu1M.txt"
 file_path=dataset_7_3_split(ui_transaction_file)
 user_index,sex_index,province_index,city_index,answer_index,topic_index,author_index,user_count,sex_count,province_count,city_count,answer_count,topic_count,author_count=index_generate(file_path)
@@ -57,7 +57,10 @@ def eval_offline_test(sess, model):
         y.append(uij[11][i])
   Auc=roc_auc_score(y,y_pre)
   return Auc
-
+def save_model_out(_sess, _model, _model_save_path):
+    print('begin save model')
+    _model.saver.save(_sess, _model_save_path)
+    print('save model done')
 gpu_options = tf.GPUOptions(allow_growth=True)
 with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
   model = Model(user_count, answer_count,sex_count, province_count, city_count, topic_count,author_count)
@@ -97,5 +100,7 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
            loss_sum_train / len(train_set), auc_train,auc_test))
     sys.stdout.flush()
     model.global_epoch_step_op.eval()
+  save_model_out(sess, model, model_save_path)
+
 
 
