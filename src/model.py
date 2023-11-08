@@ -3,7 +3,7 @@ import numpy as np
 
 class Model(object):
 
-    def __init__(self, user_count, item_count,sex_count,province_count,city_count,topic_count,author_count):
+    def __init__(self, user_count, item_count,sex_count,province_count,city_count,topic_count):
 
         with tf.name_scope('init_param'):
             self.regularizer=tf.contrib.layers.l2_regularizer(0.0001)
@@ -12,7 +12,7 @@ class Model(object):
             self.position_weight=0.3
             self.aug_weight=0.3
             self.neg_weight=0.3
-            self.margin=2
+            self.margin=2.5
             self.lambad_1=1
             self.lambad_2=1
             self.ui_prop=0.5
@@ -23,7 +23,6 @@ class Model(object):
             self.province_count=province_count
             self.city_count=city_count
             self.topic_count=topic_count
-            self.author_count=author_count
 
             # placeholder
             self.lr = tf.placeholder(tf.float64, [])
@@ -60,8 +59,8 @@ class Model(object):
             self.sl_future_click=tf.placeholder(tf.int32, [None, ],name="sl_future_click")  # [B]
 
         with tf.name_scope('embedding_init'):
-            self.user_emb_w = tf.get_variable("user_emb_w", [self.user_count, hidden_units // 2],initializer=tf.random_normal_initializer(), regularizer=self.regularizer)
-            self.item_emb_w = tf.get_variable("item_emb_w", [self.item_count, hidden_units // 2],initializer=tf.random_normal_initializer(), regularizer=self.regularizer)
+            self.user_emb_w = tf.get_variable("user_emb_w", [self.user_count, self.hidden_units // 2],initializer=tf.random_normal_initializer(), regularizer=self.regularizer)
+            self.item_emb_w = tf.get_variable("item_emb_w", [self.item_count, self.hidden_units // 2],initializer=tf.random_normal_initializer(), regularizer=self.regularizer)
             self.sex_emb_w=tf.get_variable("sex_emb_w",[self.sex_count,16],initializer=tf.random_normal_initializer(), regularizer=self.regularizer)
             self.province_emb_w=tf.get_variable("province_emb_w",[self.province_count,16],initializer=tf.random_normal_initializer(), regularizer=self.regularizer)
             self.city_emb_w = tf.get_variable("city_emb_w", [self.city_count, 32],initializer=tf.random_normal_initializer(), regularizer=self.regularizer)
@@ -393,10 +392,10 @@ class Model(object):
             self.logits_attention = self.logits_click
             self.logits_sigmoid = tf.sigmoid(self.logits_attention)
             self.sup = tf.ones([tf.shape(self.supervised_signals_click)[0], ], tf.float32)
-            # supervised signals需要改
+
             self.loss_mse_attention = tf.losses.mean_squared_error(labels=self.y, predictions=self.logits_attention,
                                                                    weights=((self.sup) * (
-                                                                           self.sup + 0.04 * self.supervised_signals_click + 0.04 * self.supervised_signals_impression)))
+                                                                           self.sup + 0.3 * self.supervised_signals_click + 1.6 * self.supervised_signals_impression)))
             self.cl_loss = tf.maximum(0.0, tf.abs(self.logits_click - self.aug_logits) - tf.abs(
                 self.logits_click - self.neg_logits) + self.margin)
             # positive

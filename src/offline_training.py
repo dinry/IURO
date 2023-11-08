@@ -6,7 +6,7 @@ import random
 import numpy as np
 import tensorflow as tf
 import sys
-from input import DataInputTrain, DataInputTest
+from data_process import DataInputTrain, DataInputTest
 from model import Model
 from sklearn.metrics import roc_auc_score
 from data_prepare import *
@@ -20,9 +20,9 @@ train_batch_size = 64
 test_batch_size = 64
 
 
-answer_info_file="dataset/answer_infos.txt"
-user_info_file="dataset/user_infos.txt"
-ui_transaction_file="dataset/zhihu1M.txt"
+answer_info_file="../dataset/info_answer.csv"
+user_info_file="../dataset/info_user.csv"
+ui_transaction_file="../dataset/zhihu1M.txt"
 file_path=dataset_7_3_split(ui_transaction_file)
 user_index,sex_index,province_index,city_index,answer_index,topic_index,author_index,user_count,sex_count,province_count,city_count,answer_count,topic_count,author_count=index_generate(file_path)
 filePath=delete_answer_without_train_in_test(file_path,answer_index)
@@ -60,7 +60,7 @@ def eval_offline_test(sess, model):
 
 gpu_options = tf.GPUOptions(allow_growth=True)
 with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
-  model = Model(user_count, item_count,sex_count, province_count, city_count, topic_count,author_count)
+  model = Model(user_count, answer_count,sex_count, province_count, city_count, topic_count,author_count)
   sess.run(tf.global_variables_initializer())
   sess.run(tf.local_variables_initializer())
   auc_test=eval_offline_test(sess, model)

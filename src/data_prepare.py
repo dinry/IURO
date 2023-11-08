@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 import math
 def dataset_7_3_split(datafile_path):
-    f6 = open("zhihu1M_7_3_split.txt", 'w')
+    f6 = open("../dataset/zhihu1M_7_3_split.txt", 'w')
     history_length = []
     index_seven_three = 0
 
@@ -27,7 +27,7 @@ def dataset_7_3_split(datafile_path):
             history_length.append(len(item_seven_days))
             f6.write(ss[0] + "\t" + str.join(item_seven_days) + "\t" + str.join(item_three_days))
             f6.write("\n")
-    return "zhihu1M_7_3_split.txt"
+    return "../dataset/zhihu1M_7_3_split.txt"
 def index_generate(interaction_file_path,answer_info_file,user_info_file):
     dict_user={}
     dict_sex={}
@@ -96,7 +96,7 @@ def index_generate(interaction_file_path,answer_info_file,user_info_file):
 
 
 def delete_answer_without_train_in_test(file_path,dict_answer):
-    write_path="zhihu1M_7_3_split_without_train_in_test.txt"
+    write_path="../dataset/zhihu1M_7_3_split_without_train_in_test.txt"
     write = open(write_path, 'w')
     for line in open(file_path, "r", encoding='utf-8'):
         line = line[:-1].strip('\n').split('\t')
