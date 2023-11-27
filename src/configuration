@@ -29,7 +29,7 @@ scipy                  1.5.4
 sentencepiece          0.1.8
 setuptools             39.2.0
 sklearn                0.0
-tensorflow             1.4.0
+tensorflow             1.14.0
 tensorflow-tensorboard 0.4.0
 threadpoolctl          3.1.0
 tqdm                   4.28.1
