@@ -1,27 +1,32 @@
 import tensorflow as tf
 import numpy as np
-
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+from warnings import simplefilter
+simplefilter(action="ignore",category=FutureWarning)
+import pdb
 class Model(object):
 
-    def __init__(self, user_count, item_count,sex_count,province_count,city_count,topic_count):
+    def __init__(self, user_count,sex_count,province_count, city_count, item_count, topic_count):
 
         with tf.name_scope('init_param'):
             self.regularizer=tf.contrib.layers.l2_regularizer(0.0001)
             self.hidden_units=64
-            self.time_weight=0.3
-            self.position_weight=0.3
             self.aug_weight=0.3
             self.neg_weight=0.3
             self.margin=2.5
             self.lambad_1=1
             self.lambad_2=1
             self.ui_prop=0.5
+
             self.global_step=tf.Variable(0.0, trainable=False)
+
             self.user_count=user_count
-            self.item_count=item_count
             self.sex_count=sex_count
             self.province_count=province_count
             self.city_count=city_count
+
+            self.item_count=item_count
             self.topic_count=topic_count
 
             # placeholder
@@ -33,25 +38,29 @@ class Model(object):
 
             self.hist_click = tf.placeholder(tf.int32, [None, None],name="hist_click")  # [B, T]
             self.hist_topic = tf.placeholder(tf.int32, [None, None],name="hist_topic")  # [B, T]
-            #self.hist_author = tf.placeholder(tf.int32, [None, None],name="hist_author")  # [B, T]
             self.sl_hist_click=tf.placeholder(tf.int32, [None, ],name="sl_hist_click")  # [B]
 
             self.rational_click = tf.placeholder(tf.int32, [None, None],name="rational_click")  # [B, T]
             self.rational_topic = tf.placeholder(tf.int32, [None, None],name="rational_topic")  # [B, T]
             self.rational_sl=tf.placeholder(tf.int32, [None, ],name="rational_sl")  # [B]
 
-            self.short_term_click = tf.placeholder(tf.int32, [None, None],name="today_click")  # [B, T]
-            self.short_term_topic = tf.placeholder(tf.int32, [None, None],name="today_topic")  # [B, T]
-            self.short_term_sl=tf.placeholder(tf.int32, [None, ],name="today_sl")  # [B]
+            self.short_term_click = tf.placeholder(tf.int32, [None, None],name="short_term_click")  # [B, T]
+            self.short_term_topic = tf.placeholder(tf.int32, [None, None],name="short_term_topic")  # [B, T]
+            self.short_term_sl=tf.placeholder(tf.int32, [None, ],name="short_term_sl")  # [B]
+
+            self.long_term_click = tf.placeholder(tf.int32, [None, None],name="long_term_click")  # [B, T]
+            self.long_term_topic = tf.placeholder(tf.int32, [None, None],name="long_term_topic")  # [B, T]
+            self.long_term_sl=tf.placeholder(tf.int32, [None, ],name="long_term_sl")  # [B]
 
             self.y = tf.placeholder(tf.float32, [None, ],name="y")  # [B]
+            # {0,1}: y_sigmoid=1 denotes retention, otherwise not.
             self.y_sigmoid=tf.placeholder(tf.float32, [None, ],name="y_sigmoid")  # [B]
-            self.supervised_signals_click = tf.placeholder(tf.float32, [None, ],name="supervised_signals_click")  # [B]
-            self.supervised_signals_impression = tf.placeholder(tf.float32, [None, ],name="supervised_signals_impression")  # [B]
+            self.supervised_signals_click = tf.placeholder(tf.float32, [None, ],name="supervised_signals_click")  # [B] ss_click
+            self.supervised_signals_impression = tf.placeholder(tf.float32, [None, ],name="supervised_signals_impression")  # [B] #ss_impression
 
             # predict for online serving (used in item candidates)
-            self.target_item=tf.placeholder(tf.float32, [None, ],name="target_item")  # [B]
-            self.target_item_topic = tf.placeholder(tf.float32, [None, ], name="target_item_topic")  # [B]
+            self.target_item=tf.placeholder(tf.int32, [None, ],name="target_item")  # [B]
+            self.target_item_topic = tf.placeholder(tf.int32, [None, ], name="target_item_topic")  # [B]
 
             # clicks in next three days for training
             self.future_click=tf.placeholder(tf.int32, [None, None],name="future")  # [B, T]
@@ -64,7 +73,7 @@ class Model(object):
             self.sex_emb_w=tf.get_variable("sex_emb_w",[self.sex_count,16],initializer=tf.random_normal_initializer(), regularizer=self.regularizer)
             self.province_emb_w=tf.get_variable("province_emb_w",[self.province_count,16],initializer=tf.random_normal_initializer(), regularizer=self.regularizer)
             self.city_emb_w = tf.get_variable("city_emb_w", [self.city_count, 32],initializer=tf.random_normal_initializer(), regularizer=self.regularizer)
-            self.topic_emb_w = tf.get_variable("topic_emb_w", [self.topic_count, 64],initializer=tf.random_normal_initializer(), regularizer=self.regularizer)
+            self.topic_emb_w = tf.get_variable("topic_emb_w", [self.topic_count, 32],initializer=tf.random_normal_initializer(), regularizer=self.regularizer)
             self.item_b = tf.get_variable("item_b", [self.item_count],initializer=tf.constant_initializer(0.0))
 
         with tf.name_scope('user_embedding'):
@@ -81,10 +90,10 @@ class Model(object):
                 dynamic_size=True,
                 clear_after_read=False
             )
-            # ui retention modeling
-            def ui_model(user_profile, target_item, target_item_topic, hist_item, hist_topicg, sl):
+            # ui retention modeling, ui_retention_score generated by ui_scorer, which can be used when online serving.
+            def ui_scorer(user_profile, target_item, target_item_topic, hist_item, hist_topicg, sl):
                 target_item_emb = tf.nn.embedding_lookup(self.item_emb_w, target_item)
-                target_item_topic_emb = tf.nn.embedding_lookup(self.cate_emb_w, target_item_topic)
+                target_item_topic_emb = tf.nn.embedding_lookup(self.topic_emb_w, target_item_topic)
                 target_item_bias = tf.gather(self.item_b, target_item)
                 hist = tf.nn.embedding_lookup(self.item_emb_w, hist_item)
                 mask = tf.sequence_mask(sl, tf.shape(hist)[1], dtype=tf.float32)  # [B, T]
@@ -95,7 +104,7 @@ class Model(object):
                 hist = tf.layers.batch_normalization(inputs=hist, name='hist_1', reuse=tf.AUTO_REUSE)
                 hist = tf.reshape(hist, [-1, self.hidden_units // 2])
                 hist = tf.layers.dense(hist, 128, name='hist_2', reuse=tf.AUTO_REUSE)
-                hist_a = tf.nn.embedding_lookup(self.cate_emb_w, hist_topicg)
+                hist_a = tf.nn.embedding_lookup(self.topic_emb_w, hist_topicg)
                 hist_a *= mask
                 hist_a = tf.reduce_sum(hist_a, 1)
                 hist_a = tf.div(hist_a, tf.cast(tf.tile(tf.expand_dims(sl, 1), [1, 32]), tf.float32))
@@ -114,22 +123,22 @@ class Model(object):
                 self.user_profile, self.hist_click, self.hist_topic, 0, target_average, self.short_term_click,
                 self.short_term_topic)
 
-            def continue_loop_condition(user_profile, hist_behavior, hist_topic, step, target_average, today_click,
-                                        today_topic):
-                return tf.less(step, tf.shape(today_click)[1])
+            def continue_loop_condition(user_profile, hist_behavior, hist_topic, step, target_average, short_term_click,
+                                        short_term_topic):
+                return tf.less(step, tf.shape(short_term_click)[1])
 
-            def loop_body(user_profile, hist_behavior, hist_topic, step, target_average, today_click, today_topic):
-                target_item = today_click[:, step]
-                target_item_topic = today_topic[:, step]
-                logits = ui_model(user_profile, target_item, target_item_topic, hist_behavior, hist_topic, self.sl_hist_click)
+            def loop_body(user_profile, hist_behavior, hist_topic, step, target_average, short_term_click, short_term_topic):
+                target_item = short_term_click[:, step]
+                target_item_topic = short_term_topic[:, step]
+                logits = ui_scorer(user_profile, target_item, target_item_topic, hist_behavior, hist_topic, self.sl_hist_click)
                 target_average = target_average.write(step, logits)
-                return user_profile, hist_behavior, hist_topic, step + 1, target_average, today_click, today_topic
+                return user_profile, hist_behavior, hist_topic, step + 1, target_average, short_term_click, short_term_topic
 
-            user_profile_v1, hist_behavior_v1, hist_topic_v1, step_v1, target_average_v1, today_click_v1, today_topic_v1 = tf.while_loop(
+            user_profile_v1, hist_behavior_v1, hist_topic_v1, step_v1, target_average_v1, short_term_click_v1, short_term_topic_v1 = tf.while_loop(
                 cond=continue_loop_condition, body=loop_body, loop_vars=init_loop_var)
             self.logit = target_average_v1.stack()
             self.score_ui = tf.transpose(self.logit)
-            self.ui_predict = ui_model(self.user_profile, self.target_item, self.target_item_topic, self.hist_click,
+            self.ui_predict = ui_scorer(self.user_profile, self.target_item, self.target_item_topic, self.hist_click,
                                        self.hist_topic, self.sl_hist_click)
 
 
@@ -146,20 +155,20 @@ class Model(object):
                 outputs = tf.where(key_masks, outputs, paddings)
                 outputs = outputs / (keys.get_shape().as_list()[-1] ** 0.5)
                 outputs = tf.nn.softmax(outputs)
-                att = outputs
+                attention = outputs
                 index = tf.argmax(outputs, axis=1)
                 outputs = tf.reduce_sum(tf.multiply(outputs, logit), axis=1)
-                return outputs, att, similarity, index
+                return outputs, attention, similarity, index
             def attention_generate(target_item, target_item_topic):
                 target_item_emb = tf.nn.embedding_lookup(self.item_emb_w, target_item)
-                target_topic_emb = tf.nn.embedding_lookup(self.cate_emb_w, target_item_topic)
+                target_topic_emb = tf.nn.embedding_lookup(self.topic_emb_w, target_item_topic)
                 keys = tf.concat([target_item_emb, target_topic_emb], axis=2)
                 keys = tf.layers.dense(keys, self.hidden_units, activation=tf.nn.relu, use_bias=True, name='key_0',
                                        reuse=tf.AUTO_REUSE)
                 keys = tf.layers.dense(keys, self.hidden_units // 2, activation=tf.nn.sigmoid, use_bias=True,
                                        name='key_1', reuse=tf.AUTO_REUSE)
                 h_emb = tf.nn.embedding_lookup(self.item_emb_w, self.hist_click)
-                h_topic_emb = tf.nn.embedding_lookup(self.cate_emb_w, self.hist_topic)
+                h_topic_emb = tf.nn.embedding_lookup(self.topic_emb_w, self.hist_topic)
                 mask = tf.sequence_mask(self.sl_hist_click, tf.shape(h_emb)[1], dtype=tf.float32)  # [B, T]
                 mask = tf.expand_dims(mask, -1)  # [B, T, 1]
                 mask = tf.tile(mask, [1, 1, tf.shape(h_emb)[2]])  # [B, T, H]
@@ -188,7 +197,7 @@ class Model(object):
 
         with tf.name_scope('rational_positive'):
             future_emb = tf.nn.embedding_lookup(self.item_emb_w, self.future_click)
-            future_topic_emb = tf.nn.embedding_lookup(self.cate_emb_w, self.future_topic)
+            future_topic_emb = tf.nn.embedding_lookup(self.topic_emb_w, self.future_topic)
             mask = tf.sequence_mask(self.sl_future_click, tf.shape(future_emb)[1], dtype=tf.float32)  # [B, T]
             mask = tf.expand_dims(mask, -1)  # [B, T, 1]
             mask = tf.tile(mask, [1, 1, tf.shape(future_emb)[2]])  # [B, T, H]
@@ -210,7 +219,7 @@ class Model(object):
             query_future = tf.layers.dense(query_future, self.hidden_units // 2, activation=tf.nn.sigmoid,
                                            use_bias=True, name='f_6', reuse=tf.AUTO_REUSE)
             item = tf.nn.embedding_lookup(self.item_emb_w, self.rational_click)
-            topic = tf.nn.embedding_lookup(self.cate_emb_w, self.rational_topic)
+            topic = tf.nn.embedding_lookup(self.topic_emb_w, self.rational_topic)
             keys_b = tf.concat([item, topic], axis=2)
             keys_b = tf.layers.dense(keys_b, self.hidden_units, activation=tf.nn.relu, use_bias=True, name='f_7',
                                      reuse=tf.AUTO_REUSE)
@@ -276,15 +285,15 @@ class Model(object):
 
             self.rational_click_top5, self.rational_topic_top5 = similarity_future(query_future, keys_b,
                                                                                   self.rational_sl)
-            logit_0 = ui_model(self.user_profile, self.rational_click_top5[:, 0], self.rational_topic_top5[:, 0],
+            logit_0 = ui_scorer(self.user_profile, self.rational_click_top5[:, 0], self.rational_topic_top5[:, 0],
                                self.hist_click, self.hist_topic, self.sl_hist_click)
-            logit_1 = ui_model(self.user_profile, self.rational_click_top5[:, 1], self.rational_topic_top5[:, 1],
+            logit_1 = ui_scorer(self.user_profile, self.rational_click_top5[:, 1], self.rational_topic_top5[:, 1],
                                self.hist_click, self.hist_topic, self.sl_hist_click)
-            logit_2 = ui_model(self.user_profile, self.rational_click_top5[:, 2], self.rational_topic_top5[:, 2],
+            logit_2 = ui_scorer(self.user_profile, self.rational_click_top5[:, 2], self.rational_topic_top5[:, 2],
                                self.hist_click, self.hist_topic, self.sl_hist_click)
-            logit_3 = ui_model(self.user_profile, self.rational_click_top5[:, 3], self.rational_topic_top5[:, 3],
+            logit_3 = ui_scorer(self.user_profile, self.rational_click_top5[:, 3], self.rational_topic_top5[:, 3],
                                self.hist_click, self.hist_topic, self.sl_hist_click)
-            logit_4 = ui_model(self.user_profile, self.rational_click_top5[:, 4], self.rational_topic_top5[:, 4],
+            logit_4 = ui_scorer(self.user_profile, self.rational_click_top5[:, 4], self.rational_topic_top5[:, 4],
                                self.hist_click, self.hist_topic, self.sl_hist_click)
             logit_0 = tf.reshape(logit_0, [-1, 1])
             logit_1 = tf.reshape(logit_1, [-1, 1])
@@ -294,7 +303,7 @@ class Model(object):
             logit = tf.concat([logit_0, logit_1, logit_2, logit_3, logit_4], axis=1)
             rational_top5_sl = tf.clip_by_value(self.rational_sl, 0, 5)
             query, key = attention_generate(self.rational_click_top5, self.rational_topic_top5)
-            self.topk_positive, _, _, _ = attention_w_similarity(query, key, rational_top5_sl, logit)
+            self.logits_topk_positive, _, _, _ = attention_w_similarity(query, key, rational_top5_sl, logit)
 
 
 
@@ -393,14 +402,14 @@ class Model(object):
             self.logits_sigmoid = tf.sigmoid(self.logits_attention)
             self.sup = tf.ones([tf.shape(self.supervised_signals_click)[0], ], tf.float32)
 
-            self.loss_mse_attention = tf.losses.mean_squared_error(labels=self.y, predictions=self.logits_attention,
+            self.loss_mse_attention = tf.compat.v1.losses.mean_squared_error(labels=self.y, predictions=self.logits_attention,
                                                                    weights=((self.sup) * (
                                                                            self.sup + 0.3 * self.supervised_signals_click + 1.6 * self.supervised_signals_impression)))
             self.cl_loss = tf.maximum(0.0, tf.abs(self.logits_click - self.aug_logits) - tf.abs(
                 self.logits_click - self.neg_logits) + self.margin)
+
             # positive
-            self.logits_topk_positive = self.topk_positive
-            self.loss_mse_topk_positive = tf.losses.mean_squared_error(labels=self.y,
+            self.loss_mse_topk_positive = tf.compat.v1.losses.mean_squared_error(labels=self.y,
                                                                        predictions=self.logits_topk_positive, weights=(
                             (self.sup) * (self.sup + 0.04 * self.supervised_signals_click + 0.04 * self.supervised_signals_impression)))
             self.kl_loss_positive = kl_for_log_prob(tf.nn.log_softmax(self.logits_attention),
@@ -409,24 +418,20 @@ class Model(object):
             self.loss_positive = tf.reduce_mean(
                 self.loss_mse_attention + self.loss_mse_topk_positive + self.cl_loss + 100 * self.kl_loss_positive)
             trainable_params = tf.trainable_variables()
-            self.opt_positive = tf.train.AdamOptimizer(self.lr)
+            self.opt_positive = tf.compat.v1.train.AdamOptimizer(self.lr)
             self.gradients_positive = tf.gradients(self.loss_positive, trainable_params)
             clip_gradients_positive, _ = tf.clip_by_global_norm(self.gradients_positive, 5)
             self.train_op_positive = self.opt_positive.apply_gradients(zip(clip_gradients_positive, trainable_params),
                                                                        global_step=self.global_step)
             # negative
-            self.logits_topk_negative = self.topk_negative
-            self.loss_mse_topk_negative = tf.losses.mean_squared_error(labels=self.y,
-                                                                       predictions=self.logits_topk_negative, weights=(
-                            (self.sup) * (self.sup + 0.04 * self.supervised_signals_click + 0.04 * self.supervised_signals_impression)))
             self.loss_negative = tf.reduce_mean(self.loss_mse_attention + self.cl_loss)
-            self.opt_negative = tf.train.AdamOptimizer(self.lr)
+            self.opt_negative = tf.compat.v1.train.AdamOptimizer(self.lr)
             self.gradients_negative = tf.gradients(self.loss_negative, trainable_params)
             clip_gradients_negative, _ = tf.clip_by_global_norm(self.gradients_negative, 5)
             self.train_op_negative = self.opt_negative.apply_gradients(zip(clip_gradients_negative, trainable_params),
                                                                        global_step=self.global_step)
         with tf.name_scope('basic_info'):
-            self.saver = tf.train.Saver()
+            self.saver = tf.compat.v1.train.Saver()
             self.init_op = tf.global_variables_initializer()
             self.local_init_op = tf.local_variables_initializer()
     def train_offline(self, sess, uij, l, is_positive=False):
@@ -436,25 +441,33 @@ class Model(object):
                 self.sex: uij[1],
                 self.province: uij[2],
                 self.city: uij[3],
+
                 self.hist_click: uij[4],
                 self.hist_topic: uij[5],
                 self.sl_hist_click: uij[6],
-                self.short_term_click: uij[7],
-                self.short_term_topic: uij[8],
-                self.short_term_sl: uij[9],
-                self.y: uij[10],
-                self.supervised_signals_click: uij[12],
-                self.supervised_signals_impression: uij[13],
-                self.rational_click:uij[4],
-                self.rational_topic:uij[5],
-                self.rational_sl:uij[6],
-                self.future_click: uij[14],
-                self.future_topic: uij[15],
-                self.sl_future_click: uij[16],
+                self.long_term_click: uij[7],
+                self.long_term_topic: uij[8],
+                self.long_term_sl: uij[9],
+                self.short_term_click: uij[10],
+                self.short_term_topic: uij[11],
+                self.short_term_sl: uij[12],
+
+                self.y: uij[13],
+                self.supervised_signals_click: uij[15],
+                self.supervised_signals_impression: uij[16],
+
+                # Here, we select rationale from users' short-term behaviors
+                self.rational_click:uij[10],
+                self.rational_topic:uij[11],
+                self.rational_sl:uij[12],
+
+                self.future_click: uij[17],
+                self.future_topic: uij[18],
+                self.sl_future_click: uij[19],
                 self.lr: l
             })
         else:
-            label,loss, _ = sess.run([self.logits_sigmoid,self.loss_negative, self.train_op_positive], feed_dict={
+            label,loss, _ = sess.run([self.logits_sigmoid,self.loss_negative, self.train_op_negative], feed_dict={
                 self.user: uij[0],
                 self.sex: uij[1],
                 self.province: uij[2],
@@ -462,15 +475,15 @@ class Model(object):
                 self.hist_click: uij[4],
                 self.hist_topic: uij[5],
                 self.sl_hist_click: uij[6],
-                self.short_term_click: uij[7],
-                self.short_term_topic: uij[8],
-                self.short_term_sl: uij[9],
-                self.y: uij[10],
-                self.supervised_signals_click: uij[12],
-                self.supervised_signals_impression: uij[13],
-                self.rational_click:uij[4],
-                self.rational_topic:uij[5],
-                self.rational_sl:uij[6],
+                self.long_term_click: uij[7],
+                self.long_term_topic: uij[8],
+                self.long_term_sl: uij[9],
+                self.short_term_click: uij[10],
+                self.short_term_topic: uij[11],
+                self.short_term_sl: uij[12],
+                self.y: uij[13],
+                self.supervised_signals_click: uij[15],
+                self.supervised_signals_impression: uij[16],
                 self.lr: l
             })
         return label,loss
@@ -484,12 +497,13 @@ class Model(object):
             self.hist_click: uij[4],
             self.hist_topic:uij[5],
             self.sl_hist_click: uij[6],
-            self.short_term_click: uij[7],
-            self.short_term_topic: uij[8],
-            self.short_term_sl: uij[9],
-            self.y: uij[10],
-            self.supervised_signals_click:uij[12],
-            self.supervised_signals_impression:uij[13],
+            self.long_term_click: uij[7],
+            self.long_term_topic: uij[8],
+            self.long_term_sl: uij[9],
+            self.short_term_click: uij[10],
+            self.short_term_topic: uij[11],
+            self.short_term_sl: uij[12],
+            self.y: uij[13]
         })
         return retention_label
 

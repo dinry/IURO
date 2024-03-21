@@ -4,11 +4,22 @@ import random
 import pandas as pd
 import numpy as np
 import math
-def dataset_7_3_split(datafile_path):
-    f6 = open("../dataset/zhihu1M_7_3_split.txt", 'w')
-    history_length = []
-    index_seven_three = 0
+from warnings import simplefilter
+simplefilter(action="ignore",category=FutureWarning)
 
+model_save_path="../model_save/auc"
+answer_info_file="../dataset/answer_infos.txt"
+user_info_file="../dataset/user_infos.txt"
+ui_transaction_file="../dataset/zhihu1M.txt"
+
+def dataset_7_3_split(datafile_path):
+    '''
+    split the dataset into train and test set, here zhihurec dataset is splited by time, the first 7 days is train set, the last 3 days is test set
+    '''
+    f6 = open("../dataset/zhihu1M_7_3_split.txt","w")
+    history_length = []
+    future_return=0
+    future_not_return=0
     for line in open(datafile_path, "r", encoding='utf-8'):
         ss = line[:-1].split('\t')
         cc = ss[2].split(',')
@@ -22,8 +33,10 @@ def dataset_7_3_split(datafile_path):
                 item_seven_days.append(cc[i])
         str = ','
         if len(item_seven_days) != 0:
-            if len(item_three_days) == 0:
-                index_seven_three = index_seven_three + 1
+            if len(item_three_days)==0:
+                future_return+=1
+            else:
+                future_not_return+=1
             history_length.append(len(item_seven_days))
             f6.write(ss[0] + "\t" + str.join(item_seven_days) + "\t" + str.join(item_three_days))
             f6.write("\n")
@@ -43,24 +56,21 @@ def index_generate(interaction_file_path,answer_info_file,user_info_file):
     answer_count=0
     topic_count=0
     author_count=0
-    #pdb.set_trace()
     for line in open(interaction_file_path,"r",encoding='utf-8'):
         line = line[:-1].strip('\n').split('\t')
         if line[0] not in dict_user.keys():
             # user_count = user_count + 1
             dict_user[line[0]] = user_count
             user_count = user_count + 1
-        answers = line[1].split(',')
+        answers = line[2].split(',')
         for answer in answers:
             if answer.split('|')[0] not in dict_answer.keys():
                 # answer_count = answer_count + 1
                 dict_answer[answer.split('|')[0]] = answer_count
                 answer_count = answer_count + 1
-    #pdb.set_trace()
     for line in open(user_info_file,"r",encoding='utf-8'):
         line = line[:-1].strip('\n').split('\t')
         if line[0] in dict_user.keys():
-            #pdb.set_trace()
             sex=line[2]
             province=line[-3]
             city=line[-2]
@@ -140,6 +150,8 @@ def retention_label_generate(first_day_items,second_day_items,third_day_items,fi
     label_retention=[]
     ss_click=[]
     ss_impression=[]
+    future_click_item = []
+    future_impression_item = []
 
     for i in range(len(first_day_items)):
         label_click_1=0
@@ -163,39 +175,47 @@ def retention_label_generate(first_day_items,second_day_items,third_day_items,fi
             label_3=1
         label=label_1+label_2+label_3
         label_retention.append(label)
+
+        # the number of clilcks
+        future_ci=[]
         first_index_click = np.where(first_day_clicks[i, 0:len(first_day_clicks[0])] == 1)[0].tolist()
         second_index_click = np.where(second_day_clicks[i, 0:len(second_day_clicks[0])] == 1)[0].tolist()
         third_index_click = np.where(third_day_clicks[i, 0:len(third_day_clicks[0])] == 1)[0].tolist()
         if len(first_index_click)>0:
             label_click_1=len(first_index_click)
+            future_ci.extend(first_day_items[i][first_index_click])
         if len(second_index_click)>0:
             label_click_2=len(second_index_click)
+            future_ci.extend(second_day_items[i][second_index_click])
         if len(third_index_click)>0:
             lable_click_3=len(third_index_click)
+            future_ci.extend(third_day_items[i][third_index_click])
         click_count=label_click_1+label_click_2+lable_click_3
         ss_click.append(math.log(1+click_count,math.e))
+        #if click_count>0:
 
+
+
+        # the number of impressions
+        future_im=[]
         first_index_unclick = np.where(first_day_clicks[i, 0:len(first_day_clicks[0])] == 0)[0].tolist()
         second_index_unclick = np.where(second_day_clicks[i, 0:len(second_day_clicks[0])] == 0)[0].tolist()
         third_index_unclick = np.where(third_day_clicks[i, 0:len(third_day_clicks[0])] == 0)[0].tolist()
         if len(first_index_unclick)>0:
             label_impression_1=len(first_index_unclick)
+            future_im.extend(first_day_items[i][first_index_unclick])
         if len(second_index_unclick)>0:
             label_impression_2=len(second_index_unclick)
+            future_im.extend(second_day_items[i][second_index_unclick])
         if len(third_index_unclick)>0:
             lable_impression_3=len(third_index_unclick)
+            future_im.extend(third_day_items[i][third_index_unclick])
         impression_count=label_impression_1+label_impression_2+lable_impression_3
         ss_impression.append(math.log(1+impression_count,math.e))
+        future_click_item.append(future_ci)
+        future_impression_item.append(future_im)
 
-    return label_retention, ss_click, ss_impression
-def items_interacted_in_next_three_days(first_day_items,second_day_items,third_day_items,first_day_clicks,second_day_clicks,third_day_clicks):
-    items = np.concatenate([first_day_items, second_day_items,third_day_items], axis=0)
-    clicks = np.concatenate([first_day_clicks, second_day_clicks,third_day_clicks], axis=0)
-    click_index = np.where(clicks[0:len(clicks)] == 1)[0].tolist()
-    click_items = items[click_index]
-    impression_index = np.where(clicks[0:len(clicks)] == 0)[0].tolist()
-    impression_items = items[impression_index]
-    return click_items,impression_items
+    return label_retention, ss_click, ss_impression,future_click_item, future_impression_item
 def data_generate(file_path,dict_u,dict_i,user_infos,answer_infos):
     user_list = []
 
@@ -447,8 +467,7 @@ def data_generate(file_path,dict_u,dict_i,user_infos,answer_infos):
     items=one_items
     clicks=one_items_click
     for index_column in range(1, 5):
-        label_retention,ss_click, ss_impression= retention_label_generate(items_data[index_column], items_data[index_column + 1],items_data[index_column + 2], clicks_data[index_column],clicks_data[index_column + 1], clicks_data[index_column + 2])
-        future_click, future_impression=items_interacted_in_next_three_days(items_data[index_column], items_data[index_column + 1],items_data[index_column + 2], clicks_data[index_column],clicks_data[index_column + 1], clicks_data[index_column + 2])
+        label_retention,ss_click, ss_impression,future_click, future_impression= retention_label_generate(items_data[index_column], items_data[index_column + 1],items_data[index_column + 2], clicks_data[index_column],clicks_data[index_column + 1], clicks_data[index_column + 2])
         for index_row in range(0, len(seven_items)):
             index_click = np.where(clicks[index_row, 0:len(clicks[0])] == 1)[0].tolist()
             if len(index_click)!=0:
@@ -461,11 +480,14 @@ def data_generate(file_path,dict_u,dict_i,user_infos,answer_infos):
                 hist_i = train.tolist()
                 hist_topic=[]
                 for hi in hist_i:
-                    hist_topic.append(answer_infos[hi][0])
+                    hist_topic.append(answer_infos[hi][0][0])
                 future_i=future_click[index_row]
                 future_topic=[]
                 for fu in future_i:
-                    future_topic.append(answer_infos[fu][0])
+                    future_topic.append(answer_infos[fu][0][0])
+                # In zhihurec, the short term is the last 50 items in historical behaviors, the long term is others. If the length of historical behaviors is less than 50, the short term is the same as the long term.
+                # This is because the number of clicks is too small, so we define the short term as the last 50 items in historical behaviors.
+                # In wechat top stories, we define the short term as items for the last three days since they are relatively dense and good for training process.
                 if len(hist_i)>50:
                     short_term_item=hist_i[-50:]
                     short_term_topic=hist_topic[-50:]
@@ -476,12 +498,13 @@ def data_generate(file_path,dict_u,dict_i,user_infos,answer_infos):
                     short_term_topic=hist_topic
                     long_term_item=hist_i
                     long_term_topic=hist_topic
-                train_retention.append([u,sex,province,city,hist_i,hist_topic,short_term_item,short_term_topic,label_retention[index_row],ss_click[index_row],ss_impression[index_row],future_i,future_topic])
+
+                train_retention.append([u,sex,province,city,hist_i,hist_topic,long_term_item,long_term_topic,short_term_item,short_term_topic,label_retention[index_row],ss_click[index_row],ss_impression[index_row],future_i,future_topic])
         items = np.concatenate([items, items_data[index_column]], axis=1)
         clicks = np.concatenate([clicks, clicks_data[index_column]], axis=1)
     items = np.concatenate([items, items_data[5],items_data[6]], axis=1)
     clicks = np.concatenate([clicks, clicks_data[5],clicks_data[6]], axis=1)
-    label_retention,ss_click,ss_impression = retention_label_generate(items_data[7], items_data[8],items_data[9], clicks_data[7],clicks_data[8], clicks_data[9])
+    label_retention,ss_click,ss_impression,future_click,future_impression = retention_label_generate(items_data[7], items_data[8],items_data[9], clicks_data[7],clicks_data[8], clicks_data[9])
     for index_row in range(0, len(items)):
         index_click = np.where(clicks[index_row, 0:len(clicks[0])] == 1)[0].tolist()
         if len(index_click)!=0:
@@ -490,11 +513,11 @@ def data_generate(file_path,dict_u,dict_i,user_infos,answer_infos):
             province = user_infos[u][1]
             city = user_infos[u][2]
             row=items[index_row]
-            train=row[index_click]
-            hist_i = train.tolist()
+            test=row[index_click]
+            hist_i = test.tolist()
             hist_topic = []
             for hi in hist_i:
-                hist_topic.append(answer_infos[hi][0])
+                hist_topic.append(answer_infos[hi][0][0])
             if len(hist_i) > 50:
                 short_term_item = hist_i[-50:]
                 short_term_topic = hist_topic[-50:]
@@ -505,6 +528,12 @@ def data_generate(file_path,dict_u,dict_i,user_infos,answer_infos):
                 short_term_topic = hist_topic
                 long_term_item = hist_i
                 long_term_topic = hist_topic
-            test_retention.append([u,sex,province,city,hist_i,hist_topic,short_term_item,short_term_topic,label_retention[index_row],ss_click[index_row],ss_impression[index_row]])
+            future_i = future_click[index_row]
+            future_topic = []
+            for fu in future_i:
+                future_topic.append(answer_infos[fu][0])
+            test_retention.append([u,sex,province,city,hist_i,hist_topic,long_term_item,long_term_topic,short_term_item,short_term_topic,label_retention[index_row],ss_click[index_row],ss_impression[index_row],future_i,future_topic])
     random.shuffle(test_retention)
+    random.shuffle(train_retention)
     return train_retention,test_retention
+
